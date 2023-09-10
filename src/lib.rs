@@ -2,9 +2,12 @@
 #![doc = include_str!("../README.md")]
 
 pub mod connection;
+pub mod connection2;
+pub mod dyn_pool;
 pub mod errors;
 pub mod factory;
 pub mod pool;
+pub mod pool2;
 
 pub use pool::RedisPool;
 pub use pool::SingleRedisPool;

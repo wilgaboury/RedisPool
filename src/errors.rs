@@ -1,5 +1,5 @@
 use thiserror::Error;
-use tokio::sync::AcquireError;
+use tokio::{sync::AcquireError, task::JoinError};
 
 #[derive(Error, Debug)]
 pub enum RedisPoolError {
@@ -7,4 +7,6 @@ pub enum RedisPoolError {
     Redis(#[from] redis::RedisError),
     #[error(transparent)]
     AcquireError(#[from] AcquireError),
+    #[error(transparent)]
+    JoinError(#[from] JoinError),
 }
