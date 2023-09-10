@@ -9,4 +9,6 @@ pub enum RedisPoolError {
     AcquireError(#[from] AcquireError),
     #[error(transparent)]
     JoinError(#[from] JoinError),
+    #[error("No dynamic pool was configured")]
+    MissingDynamicPool,
 }
