@@ -25,7 +25,7 @@ impl<T> TtlQueue<T> {
     pub fn pop(&self) -> Option<T> {
         let now = Instant::now();
         while let Some(item) = self.pool.pop() {
-            if self.pool.is_empty() || now - item.time < self.ttl {
+            if now - item.time < self.ttl {
                 return Some(item.item);
             }
         }

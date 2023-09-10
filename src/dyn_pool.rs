@@ -41,9 +41,9 @@ where
         };
     }
 
-    /// The cleaner is a service that wakes up on the ttl interval to check if
-    /// if the oldest connection (the one at the front of the queue) is past it's
-    /// ttl
+    /// The cleaner is a service that wakes up on the ttl interval to pop the
+    /// oldest connection (the one at the front of the queue), effectivley cleaning
+    /// out any connection that are past their ttl
     fn launch_cleaner(dyn_pool: TtlQueue<C>, mut rx: oneshot::Receiver<()>, ttl: Duration) {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(ttl);
