@@ -5,12 +5,12 @@ use std::{
 
 use crossbeam_queue::SegQueue;
 
-pub struct TtlPool<T> {
-    pub(crate) item: T,
-    pub(crate) time: Instant,
+pub struct TtlQueueItem<T> {
+    item: T,
+    time: Instant,
 }
 pub struct TtlQueue<T> {
-    pool: Arc<SegQueue<TtlPool<T>>>,
+    pool: Arc<SegQueue<TtlQueueItem<T>>>,
     ttl: Duration,
 }
 
@@ -33,7 +33,7 @@ impl<T> TtlQueue<T> {
     }
 
     pub fn push(&self, item: T) {
-        self.pool.push(TtlPool {
+        self.pool.push(TtlQueueItem {
             item,
             time: Instant::now(),
         })

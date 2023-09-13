@@ -58,3 +58,16 @@ where
         (&self.pool[idx % self.pool.len()]).get_db()
     }
 }
+
+const _: () = {
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+
+    fn assert_all<F, M, C>()
+    where
+        M: redis::aio::ConnectionLike + Send + Sync + Clone,
+    {
+        assert_send::<MultiPool<M>>();
+        assert_sync::<MultiPool<M>>();
+    }
+};
