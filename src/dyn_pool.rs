@@ -27,11 +27,13 @@ where
     F: ConnectionFactory<C> + Send + Sync + Clone,
     C: redis::aio::ConnectionLike + Send + 'static,
 {
-    pub fn new(factory: F, ttl: Duration, limit: Option<usize>) -> Self {
+    pub fn new(factory: F, ttl: Option<Duration>, limit: Option<usize>) -> Self {
         let pool = TtlQueue::new(ttl);
 
         let (tx, rx) = oneshot::channel();
-        Self::launch_cleaner(pool.clone(), rx, ttl);
+        if let Some(ttl) = ttl {
+            Self::launch_cleaner(pool.clone(), rx, ttl);
+        }
 
         return DynPool {
             factory,

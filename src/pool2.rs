@@ -88,7 +88,7 @@ where
 pub type SingleRedisPool2 = RedisPool2<MultiplexedConnection, Client, Connection>;
 
 pub struct DynPoolArgs {
-    pub ttl: Duration,
+    pub ttl: Option<Duration>,
     pub limit: Option<usize>,
 }
 

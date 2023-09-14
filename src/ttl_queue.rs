@@ -11,11 +11,11 @@ pub struct TtlQueueItem<T> {
 }
 pub struct TtlQueue<T> {
     pool: Arc<SegQueue<TtlQueueItem<T>>>,
-    ttl: Duration,
+    ttl: Option<Duration>,
 }
 
 impl<T> TtlQueue<T> {
-    pub fn new(ttl: Duration) -> Self {
+    pub fn new(ttl: Option<Duration>) -> Self {
         TtlQueue {
             pool: Arc::new(SegQueue::new()),
             ttl,
@@ -23,10 +23,15 @@ impl<T> TtlQueue<T> {
     }
 
     pub fn pop(&self) -> Option<T> {
-        let now = Instant::now();
         while let Some(item) = self.pool.pop() {
-            if now - item.time < self.ttl {
-                return Some(item.item);
+            match self.ttl {
+                Some(ttl) => {
+                    let now = Instant::now();
+                    if now - item.time < ttl {
+                        return Some(item.item);
+                    }
+                }
+                None => return Some(item.item),
             }
         }
         None
