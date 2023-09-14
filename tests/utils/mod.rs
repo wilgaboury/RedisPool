@@ -2,6 +2,7 @@
 
 use std::ops::Deref;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use futures::FutureExt;
 use redis::{
@@ -35,6 +36,22 @@ fn create_redis_cluster_image() -> RunnableImage<GenericImage> {
     let image =
         GenericImage::new(REDIS_CLUSTER_IMG_NAME, REDIS_CLUSTER_IMG_VER).with_wait_for(wait);
     RunnableImage::from(image).with_network("host")
+}
+
+pub async fn get_set_byte_array<C: ConnectionLike>(
+    key: &str,
+    value: &[u8],
+    con: &mut C,
+) -> anyhow::Result<Vec<u8>> {
+    let (value,) = redis::Pipeline::with_capacity(2)
+        .set(&key, value)
+        .ignore()
+        .get(&key)
+        .query_async::<_, (Vec<u8>,)>(con)
+        .await
+        .context("Failed to set/get from redis")?;
+
+    Ok(value)
 }
 
 pub struct TestRedis<'a> {

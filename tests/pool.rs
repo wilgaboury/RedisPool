@@ -2,10 +2,9 @@ mod utils;
 
 use anyhow::Context;
 use futures::future::join_all;
-use redis::aio::ConnectionLike;
 use redis_pool::{pool::RedisPool, SingleRedisPool};
 use testcontainers::clients::{self, Cli};
-use utils::TestRedis;
+use utils::{get_set_byte_array, TestRedis};
 
 use crate::utils::ClosableConnectionFactory;
 
@@ -61,19 +60,7 @@ async fn get_set_byte_array_from_pool(
         .await
         .context("Failed to establish connection")?;
 
-    get_set_byte_array(key, &mut con).await
-}
-
-async fn get_set_byte_array<C: ConnectionLike>(key: &str, con: &mut C) -> anyhow::Result<Vec<u8>> {
-    let (value,) = redis::Pipeline::with_capacity(2)
-        .set(&key, &DATA[..])
-        .ignore()
-        .get(&key)
-        .query_async::<_, (Vec<u8>,)>(con)
-        .await
-        .context("Failed to set/get from redis")?;
-
-    Ok(value)
+    get_set_byte_array(key, &DATA, &mut con).await
 }
 
 #[tokio::test]
@@ -83,13 +70,13 @@ pub async fn test_bad_connection_eviction() -> anyhow::Result<()> {
     let pool = RedisPool::new(ClosableConnectionFactory(redis.client()), 1, Some(1));
     let mut con = pool.aquire().await.context("Failed to open connection")?;
 
-    get_set_byte_array("foo", &mut con)
+    get_set_byte_array("foo", &DATA, &mut con)
         .await
         .context("Failed to get/set from redis")?;
 
     con.close();
 
-    get_set_byte_array("foo", &mut con)
+    get_set_byte_array("foo", &DATA, &mut con)
         .await
         .err()
         .context("Closed connection unexpectedly worked")?;
@@ -98,7 +85,7 @@ pub async fn test_bad_connection_eviction() -> anyhow::Result<()> {
 
     let mut con = pool.aquire().await.context("Failed to open connection")?;
 
-    get_set_byte_array("foo", &mut con)
+    get_set_byte_array("foo", &DATA, &mut con)
         .await
         .context("Failed to get/set from redis")?;
 
