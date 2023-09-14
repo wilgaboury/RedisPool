@@ -53,3 +53,23 @@ impl<T> Clone for TtlQueue<T> {
         }
     }
 }
+
+#[test]
+fn test_eviction() {
+    let queue: TtlQueue<usize> = TtlQueue::new(Some(Duration::from_secs(1)));
+
+    queue.push(1);
+    queue.push(2);
+    queue.push(3);
+
+    std::thread::sleep(Duration::from_secs(2));
+
+    assert_eq!(None, queue.pop());
+
+    queue.push(1);
+    queue.push(2);
+
+    assert_eq!(Some(1), queue.pop());
+    assert_eq!(Some(2), queue.pop());
+    assert_eq!(None, queue.pop());
+}
