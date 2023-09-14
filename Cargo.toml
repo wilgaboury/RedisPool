@@ -37,3 +37,7 @@ features = [ "v4", "fast-rng", "macro-diagnostics" ]
 [[bench]]
 name = "parallel_throughput"
 harness = false
+
+[[bench]]
+name = "parallel_latency"
+harness = false

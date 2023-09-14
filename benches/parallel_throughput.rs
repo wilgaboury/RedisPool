@@ -19,20 +19,22 @@ fn parallel_throughput(c: &mut Criterion) {
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .start_paused(true)
         .build()
         .unwrap();
 
-    let mut g = c.benchmark_group("Parallel Throughput");
+    let mut g = c.benchmark_group("parallel_throughput");
+    g.sample_size(10);
 
-    for i in 4..10 {
+    for i in 4..=10 {
         let pool_size = 2_usize.pow(i);
-        for j in i..10 {
+        for j in i..=10 {
             let con_limit = 2_usize.pow(j);
             parallel_throughput_inner(&mut g, &rt, redis.client(), pool_size, Some(con_limit));
         }
         parallel_throughput_inner(&mut g, &rt, redis.client(), pool_size, None);
     }
+
+    g.finish();
 }
 
 fn parallel_throughput_inner<M: Measurement>(
@@ -45,7 +47,7 @@ fn parallel_throughput_inner<M: Measurement>(
     let pool = RedisPool::new(client, pool_size, con_limit);
 
     let name = format!(
-        "(pool: {}, limit: {})",
+        "pool_{:0>4}_limit_{:0>4}",
         pool_size,
         con_limit
             .map(|i| i.to_string())

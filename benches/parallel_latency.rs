@@ -1,7 +1,6 @@
 use criterion::{
-    black_box, criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup, Criterion,
+    criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup, Criterion,
 };
-use futures::future::join_all;
 use redis_pool::RedisPool;
 use testcontainers::clients::Cli;
 use tokio::runtime::Runtime;
@@ -23,20 +22,22 @@ fn parallel_latency(c: &mut Criterion) {
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .start_paused(true)
         .build()
         .unwrap();
 
-    let mut g = c.benchmark_group("Parallel Throughput");
+    let mut g = c.benchmark_group("parallel_latency");
+    g.sample_size(100);
 
-    for i in 4..10 {
+    for i in 4..=10 {
         let pool_size = 2_usize.pow(i);
-        for j in i..10 {
+        for j in i..=10 {
             let con_limit = 2_usize.pow(j);
             parallel_latency_inner(&mut g, &rt, redis.client(), pool_size, Some(con_limit));
         }
         parallel_latency_inner(&mut g, &rt, redis.client(), pool_size, None);
     }
+
+    g.finish();
 }
 
 fn parallel_latency_inner<M: Measurement>(
@@ -49,7 +50,7 @@ fn parallel_latency_inner<M: Measurement>(
     let pool = RedisPool::new(client, pool_size, con_limit);
 
     let name = format!(
-        "(pool: {}, limit: {})",
+        "pool_{:0>4}_limit_{:0>4}",
         pool_size,
         con_limit
             .map(|i| i.to_string())
@@ -60,8 +61,10 @@ fn parallel_latency_inner<M: Measurement>(
         let (tx, mut rx) = oneshot::channel::<()>();
 
         let load_pool = pool.clone();
+
+        // perform get/set on redis at rate of 500 requests per second
         let join = rt.spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(1));
+            let mut interval = time::interval(Duration::from_millis(2));
             loop {
                 select! {
                     _ = interval.tick() => {
@@ -78,15 +81,9 @@ fn parallel_latency_inner<M: Measurement>(
             }
         });
 
-        b.to_async(rt).iter(|| {
-            join_all((0..black_box(1000)).map(|i| {
-                let i = i.to_string();
-                let pool = pool.clone();
-                tokio::spawn(async move {
-                    let mut con = pool.aquire().await.unwrap();
-                    get_set_byte_array(&i, &DATA, &mut con).await
-                })
-            }))
+        b.to_async(rt).iter(|| async {
+            let mut con = pool.aquire().await.unwrap();
+            get_set_byte_array(&Uuid::new_v4().to_string(), &DATA, &mut con).await
         });
 
         tx.send(()).unwrap();
