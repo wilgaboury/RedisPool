@@ -88,6 +88,7 @@ where
 pub type SingleRedisPool2 = RedisPool2<MultiplexedConnection, Client, Connection>;
 
 pub struct DynPoolArgs {
+    pub size: usize,
     pub ttl: Option<Duration>,
     pub limit: Option<usize>,
 }
@@ -110,7 +111,7 @@ impl SingleRedisPool2 {
 
         Ok(RedisPool2::new(
             MultiPool::new(pool),
-            dyn_args.map(|args| DynPool::new(client, args.ttl, args.limit)),
+            dyn_args.map(|args| DynPool::new(client, args.ttl, args.size, args.limit)),
         ))
     }
 }

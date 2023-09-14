@@ -27,8 +27,8 @@ where
     F: ConnectionFactory<C> + Send + Sync + Clone,
     C: redis::aio::ConnectionLike + Send + 'static,
 {
-    pub fn new(factory: F, ttl: Option<Duration>, limit: Option<usize>) -> Self {
-        let pool = TtlQueue::new(ttl);
+    pub fn new(factory: F, ttl: Option<Duration>, size: usize, limit: Option<usize>) -> Self {
+        let pool = TtlQueue::new(size, ttl);
 
         let (tx, rx) = oneshot::channel();
         if let Some(ttl) = ttl {

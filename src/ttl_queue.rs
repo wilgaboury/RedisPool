@@ -3,21 +3,21 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_queue::SegQueue;
+use crossbeam_queue::ArrayQueue;
 
 pub struct TtlQueueItem<T> {
     item: T,
     time: Instant,
 }
 pub struct TtlQueue<T> {
-    pool: Arc<SegQueue<TtlQueueItem<T>>>,
+    pool: Arc<ArrayQueue<TtlQueueItem<T>>>,
     ttl: Option<Duration>,
 }
 
 impl<T> TtlQueue<T> {
-    pub fn new(ttl: Option<Duration>) -> Self {
+    pub fn new(size: usize, ttl: Option<Duration>) -> Self {
         TtlQueue {
-            pool: Arc::new(SegQueue::new()),
+            pool: Arc::new(ArrayQueue::new(size)),
             ttl,
         }
     }
@@ -38,10 +38,10 @@ impl<T> TtlQueue<T> {
     }
 
     pub fn push(&self, item: T) {
-        self.pool.push(TtlQueueItem {
+        let _ = self.pool.push(TtlQueueItem {
             item,
             time: Instant::now(),
-        })
+        });
     }
 }
 
@@ -56,11 +56,10 @@ impl<T> Clone for TtlQueue<T> {
 
 #[test]
 fn test_eviction() {
-    let queue: TtlQueue<usize> = TtlQueue::new(Some(Duration::from_secs(1)));
+    let queue: TtlQueue<usize> = TtlQueue::new(2, Some(Duration::from_secs(1)));
 
     queue.push(1);
     queue.push(2);
-    queue.push(3);
 
     std::thread::sleep(Duration::from_secs(2));
 
@@ -68,6 +67,7 @@ fn test_eviction() {
 
     queue.push(1);
     queue.push(2);
+    queue.push(3);
 
     assert_eq!(Some(1), queue.pop());
     assert_eq!(Some(2), queue.pop());
