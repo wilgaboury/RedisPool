@@ -16,6 +16,10 @@ mod utils;
 const DATA_SIZE: usize = 1_048_576;
 const DATA: [u8; DATA_SIZE] = [1; DATA_SIZE];
 
+const SAMPLES: usize = 10;
+const MIN: usize = 4;
+const MAX: usize = 4;
+
 fn parallel_latency(c: &mut Criterion) {
     let docker = Cli::docker();
     let redis = TestRedis::new(&docker);
@@ -26,12 +30,12 @@ fn parallel_latency(c: &mut Criterion) {
         .unwrap();
 
     let mut g = c.benchmark_group("parallel_latency");
-    g.sample_size(100);
+    g.sample_size(SAMPLES);
 
-    for i in 4..=10 {
-        let pool_size = 2_usize.pow(i);
-        for j in i..=10 {
-            let con_limit = 2_usize.pow(j);
+    for i in MIN..=MAX {
+        let pool_size = 1 << i;
+        for j in i..=MAX {
+            let con_limit = 1 << j;
             parallel_latency_inner(&mut g, &rt, redis.client(), pool_size, Some(con_limit));
         }
         parallel_latency_inner(&mut g, &rt, redis.client(), pool_size, None);
@@ -71,7 +75,7 @@ fn parallel_latency_inner<M: Measurement>(
                         let load_pool_clone = load_pool.clone();
                         tokio::spawn(async move {
                             let mut con = load_pool_clone.aquire().await.unwrap();
-                            get_set_byte_array(&Uuid::new_v4().to_string(), &DATA, &mut con).await
+                            get_set_byte_array("0", &DATA, &mut con).await
                         });
                     }
                     _ = &mut rx => {
