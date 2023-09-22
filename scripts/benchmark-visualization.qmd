@@ -10,11 +10,29 @@ editor: visual
 install.packages("tidyverse")
 ```
 
-You can add options to executable code like this
+## Use Packages
 
 ```{r}
-#| echo: false
-2 * 2
+library(tidyverse)
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+## Read In Data
+
+This step requires that `cargo bench` and `collect-bench.py` have been run.
+
+```{r}
+data <- read.csv('benchmark.csv')
+```
+
+## Reshape and Clean Data
+
+```{r}
+clean <- data %>%
+  extract(name, c("pool_size", "con_lim"), "^\\w*_(\\d*)_\\w*_(\\d*|\\w*)") %>%
+  mutate(per_val = val / itr, across(c(pool_size, con_lim), as.numeric)) %>%
+  select(-val, -itr) %>%
+  rename(val = per_val, name = bench)
+
+# debug info
+# str(clean)
+```
