@@ -13,9 +13,9 @@ mod utils;
 const DATA_SIZE: usize = 1_048_576;
 const DATA: [u8; DATA_SIZE] = [1; DATA_SIZE];
 
-const SAMPLES: usize = 10;
+const SAMPLES: usize = 25;
 const MIN: usize = 4;
-const MAX: usize = 4;
+const MAX: usize = 10;
 
 fn parallel_throughput(c: &mut Criterion) {
     let docker = Cli::docker();
@@ -60,12 +60,11 @@ fn parallel_throughput_inner<M: Measurement>(
 
     g.bench_function(&name, |b| {
         b.to_async(rt).iter(|| {
-            join_all((0..black_box(1000)).map(|i| {
-                let i = i.to_string();
+            join_all((0..black_box(1000)).map(|_i| {
                 let pool = pool.clone();
                 tokio::spawn(async move {
                     let mut con = pool.aquire().await.unwrap();
-                    get_set_byte_array(&i, &DATA, &mut con).await
+                    get_set_byte_array("0", &DATA, &mut con).await
                 })
             }))
         })

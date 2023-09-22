@@ -8,7 +8,6 @@ use tokio::select;
 use tokio::sync::oneshot;
 use tokio::time::{self, Duration};
 use utils::{get_set_byte_array, TestRedis};
-use uuid::Uuid;
 
 #[path = "../tests/utils/mod.rs"]
 mod utils;
@@ -16,9 +15,9 @@ mod utils;
 const DATA_SIZE: usize = 1_048_576;
 const DATA: [u8; DATA_SIZE] = [1; DATA_SIZE];
 
-const SAMPLES: usize = 10;
+const SAMPLES: usize = 100;
 const MIN: usize = 4;
-const MAX: usize = 4;
+const MAX: usize = 10;
 
 fn parallel_latency(c: &mut Criterion) {
     let docker = Cli::docker();
@@ -87,7 +86,7 @@ fn parallel_latency_inner<M: Measurement>(
 
         b.to_async(rt).iter(|| async {
             let mut con = pool.aquire().await.unwrap();
-            get_set_byte_array(&Uuid::new_v4().to_string(), &DATA, &mut con).await
+            get_set_byte_array("1", &DATA, &mut con).await
         });
 
         tx.send(()).unwrap();

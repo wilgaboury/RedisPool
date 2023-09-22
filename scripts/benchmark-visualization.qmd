@@ -35,4 +35,26 @@ clean <- data %>%
 
 # debug info
 # str(clean)
+
+# output to file
+# write.csv(clean, "clean_benchmark.csv", row.names=FALSE)
+```
+
+```{r}
+clean %>% 
+  filter(name == "parallel_throughput") %>%
+  mutate(val = 1/(val/1e9)) %>%
+  ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) + 
+    geom_point() +
+    geom_smooth(method=glm, family=binomial, aes(group = con_lim)) +
+    scale_x_log10()
+```
+
+```{r}
+clean %>% 
+  filter(name == "parallel_latency") %>%
+  ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) + 
+    geom_point() +
+    geom_smooth(method=glm, family=binomial, aes(group = con_lim)) +
+    scale_x_log10()
 ```
