@@ -1,4 +1,4 @@
 FROM redis-common:latest
-EXPOSE 7000 7001 7002
+EXPOSE 6379
 COPY run.sh .
-CMD ["./run.sh"]
+CMD [ "./run.sh" ]

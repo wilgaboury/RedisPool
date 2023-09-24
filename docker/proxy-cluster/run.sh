@@ -2,6 +2,6 @@
 
 ./run-cluster.sh
 
-echo CLUSTER READY!
+envoy -c config.yaml &
 
 sleep infinity

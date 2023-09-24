@@ -15,4 +15,4 @@ trap stop_redis SIGTERM
 
 # Start redis
 redis-server &
-wait %?redis-server
+wait

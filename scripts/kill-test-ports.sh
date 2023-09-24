@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ports=(6379 6380 6381)
+ports=(7000 7001 7002)
 for port in "${ports[@]}"; do
     sudo kill $(sudo lsof -t -i:$port)
 done
