@@ -41,20 +41,35 @@ clean <- data %>%
 ```
 
 ```{r}
-clean %>% 
+plot_data <- clean %>% 
   filter(name == "parallel_throughput") %>%
-  mutate(val = 1/(val/1e9)) %>%
-  ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) + 
+  mutate(val = 1/(val/1e9)) # nano to hz
+
+breaks <- sort((plot_data %>% distinct(pool_size))[['pool_size']])
+
+plot_data %>%
+  ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) +
     geom_point() +
-    geom_smooth(method=glm, family=binomial, aes(group = con_lim)) +
-    scale_x_log10()
+    geom_smooth(method = 'loess', aes(group=con_lim)) +
+    scale_x_continuous(name="Pool Size", breaks=breaks) +
+    scale_y_continuous(name="Throughput (Gb/s)") +
+    scale_color_discrete(name="Connection Limit") +
+    coord_trans(x="log10")
 ```
 
 ```{r}
-clean %>% 
+plot_data <- clean %>%
   filter(name == "parallel_latency") %>%
-  ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) + 
+  mutate(val = val/1e6) # nano to milli
+
+breaks <- sort((plot_data %>% distinct(pool_size))[['pool_size']])
+
+plot_data %>%
+  ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) +
     geom_point() +
-    geom_smooth(method=glm, family=binomial, aes(group = con_lim)) +
-    scale_x_log10()
+    geom_smooth(method = 'lm', aes(group = con_lim)) +
+    scale_x_continuous(name="Pool Size", breaks=breaks) +
+    scale_y_continuous(name="Latency (ms)") +
+    scale_color_discrete(name="Connection Limit") +
+    coord_trans(x="log10")
 ```

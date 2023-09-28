@@ -1,5 +1,6 @@
 use crate::{connection::RedisPoolConnection, errors::RedisPoolError, factory::ConnectionFactory};
 use crossbeam_queue::ArrayQueue;
+use futures::future;
 use redis::{aio::Connection, Client, RedisResult};
 use std::{ops::Deref, sync::Arc};
 use tokio::sync::Semaphore;
@@ -32,6 +33,19 @@ where
             queue: Arc::new(ArrayQueue::new(pool_size)),
             sem: con_limit.map(|lim| Arc::new(Semaphore::new(lim))),
         };
+    }
+
+    pub async fn fill(&self) {
+        let cons =
+            future::join_all((0..self.queue.capacity()).map(|_| self.factory.create())).await;
+        for maybe_con in cons {
+            match maybe_con {
+                Ok(con) => {
+                    let _ = self.queue.push(con);
+                }
+                Err(e) => tracing::warn!("connection to connect to pool {}", e),
+            }
+        }
     }
 
     pub async fn aquire(&self) -> Result<RedisPoolConnection<C>, RedisPoolError> {

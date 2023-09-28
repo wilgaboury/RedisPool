@@ -49,6 +49,7 @@ fn parallel_throughput_inner<M: Measurement>(
     con_limit: Option<usize>,
 ) {
     let pool = RedisPool::new(client, pool_size, con_limit);
+    rt.block_on(pool.fill());
 
     let name = format!(
         "pool_{:0>4}_limit_{:0>4}",
