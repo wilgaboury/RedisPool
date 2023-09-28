@@ -4,4 +4,6 @@
 
 envoy -c config.yaml &
 
+echo CLUSTER READY!
+
 sleep infinity

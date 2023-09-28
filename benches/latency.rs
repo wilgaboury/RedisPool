@@ -1,6 +1,10 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use criterion::{
     criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup, Criterion,
 };
+use futures::future::join_all;
 use redis_pool::RedisPool;
 use testcontainers::clients::Cli;
 use tokio::runtime::Runtime;
@@ -9,6 +13,8 @@ use tokio::sync::oneshot;
 use tokio::time::{self, Duration};
 use utils::{get_set_byte_array, TestRedis};
 
+use crate::utils::bench::KEY_RANGE;
+
 #[path = "../tests/utils/mod.rs"]
 mod utils;
 
@@ -16,10 +22,10 @@ const DATA_SIZE: usize = 1_048_576;
 const DATA: [u8; DATA_SIZE] = [1; DATA_SIZE];
 
 const SAMPLES: usize = 100;
-const MIN: usize = 4;
-const MAX: usize = 10;
+const MIN: usize = 1;
+const MAX: usize = 8;
 
-fn parallel_latency(c: &mut Criterion) {
+fn latency(c: &mut Criterion) {
     let docker = Cli::docker();
     let redis = TestRedis::new(&docker);
 
@@ -28,22 +34,22 @@ fn parallel_latency(c: &mut Criterion) {
         .build()
         .unwrap();
 
-    let mut g = c.benchmark_group("parallel_latency");
+    let mut g = c.benchmark_group("latency");
     g.sample_size(SAMPLES);
 
     for i in MIN..=MAX {
         let pool_size = 1 << i;
         for j in i..=MAX {
             let con_limit = 1 << j;
-            parallel_latency_inner(&mut g, &rt, redis.client(), pool_size, Some(con_limit));
+            latency_inner(&mut g, &rt, redis.client(), pool_size, Some(con_limit));
         }
-        parallel_latency_inner(&mut g, &rt, redis.client(), pool_size, None);
+        latency_inner(&mut g, &rt, redis.client(), pool_size, None);
     }
 
     g.finish();
 }
 
-fn parallel_latency_inner<M: Measurement>(
+fn latency_inner<M: Measurement>(
     g: &mut BenchmarkGroup<'_, M>,
     rt: &Runtime,
     client: redis::Client,
@@ -62,36 +68,32 @@ fn parallel_latency_inner<M: Measurement>(
     );
 
     g.bench_function(&name, |b| {
-        let (tx, mut rx) = oneshot::channel::<()>();
-
+        let stop = Arc::new(AtomicBool::new(false));
         let load_pool = pool.clone();
 
-        // perform get/set on redis at rate of 500 requests per second
-        let join = rt.spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(2));
-            loop {
-                select! {
-                    _ = interval.tick() => {
-                        let load_pool_clone = load_pool.clone();
-                        tokio::spawn(async move {
-                            let mut con = load_pool_clone.aquire().await.unwrap();
-                            get_set_byte_array("0", &DATA, &mut con).await
-                        });
-                    }
-                    _ = &mut rx => {
-                        return;
-                    }
+        // keep 500 concurrent connections open
+        let joins = (0..500).map(|i| {
+            let load_pool_clone = load_pool.clone();
+            let stop = stop.clone();
+            rt.spawn(async move {
+                while !stop.load(Ordering::Relaxed) {
+                    let mut con = load_pool_clone.aquire().await.unwrap();
+                    let key = (i % KEY_RANGE).to_string();
+                    let _ = get_set_byte_array(key.as_str(), &DATA, &mut con).await;
                 }
-            }
+            })
         });
 
         b.to_async(rt).iter(|| async {
             let mut con = pool.aquire().await.unwrap();
-            get_set_byte_array("1", &DATA, &mut con).await
+            let _ = redis::cmd("PING")
+                .arg(0)
+                .query_async::<_, ()>(&mut con)
+                .await;
         });
 
-        tx.send(()).unwrap();
-        rt.block_on(async { join.await }).unwrap();
+        stop.store(true, Ordering::Relaxed);
+        let _ = rt.block_on(async { join_all(joins).await });
     });
 
     rt.block_on(async {
@@ -101,5 +103,5 @@ fn parallel_latency_inner<M: Measurement>(
     })
 }
 
-criterion_group!(benches, parallel_latency);
+criterion_group!(benches, latency);
 criterion_main!(benches);

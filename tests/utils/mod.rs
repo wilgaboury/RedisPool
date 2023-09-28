@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod bench;
+
 use std::ops::Deref;
 
 use anyhow::Context;
@@ -24,6 +26,9 @@ const REDIS_CLUSTER_IMG_VER: &str = "latest";
 const REDIS_CLUSTER_PORTS: [u16; 3] = [6379, 6380, 6380];
 const REDIS_CLUSTER_READY_MSG: &str = "CLUSTER READY!";
 
+const REDIS_CLUSTER_PROXY_IMG_NAME: &str = "redis-proxy-cluster";
+const REDIS_CLUSTER_PROXY_IMG_VER: &str = "latest";
+
 fn create_redis_image() -> GenericImage {
     let wait = WaitFor::message_on_stdout(REDIS_READY_MSG);
     GenericImage::new(REDIS_IMG_NAME, REDIS_IMG_VER)
@@ -36,6 +41,13 @@ fn create_redis_cluster_image() -> RunnableImage<GenericImage> {
     let image =
         GenericImage::new(REDIS_CLUSTER_IMG_NAME, REDIS_CLUSTER_IMG_VER).with_wait_for(wait);
     RunnableImage::from(image).with_network("host")
+}
+
+fn create_redis_proxy_cluster_image() -> GenericImage {
+    let wait = WaitFor::message_on_stdout(REDIS_CLUSTER_READY_MSG);
+    GenericImage::new(REDIS_CLUSTER_PROXY_IMG_NAME, REDIS_CLUSTER_PROXY_IMG_VER)
+        .with_wait_for(wait)
+        .with_exposed_port(REDIS_PORT)
 }
 
 pub async fn get_set_byte_array<C: ConnectionLike>(
@@ -91,6 +103,12 @@ impl<'a> TestClusterRedis<'a> {
     pub fn new(docker: &'a Cli) -> Self {
         TestClusterRedis {
             container: docker.run(create_redis_cluster_image()),
+        }
+    }
+
+    pub fn new_proxy_cluster(docker: &'a Cli) -> Self {
+        TestClusterRedis {
+            container: docker.run(create_redis_proxy_cluster_image()),
         }
     }
 
