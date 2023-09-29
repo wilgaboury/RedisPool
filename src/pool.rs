@@ -25,14 +25,14 @@ where
 {
     pub fn new(factory: F, pool_size: usize, con_limit: Option<usize>) -> Self {
         if pool_size > con_limit.unwrap_or(usize::MAX) {
-            tracing::warn!("pool size is less then connection limit");
+            tracing::warn!("pool size is greater then connection limit");
         }
 
-        return RedisPool {
+        RedisPool {
             factory,
             queue: Arc::new(ArrayQueue::new(pool_size)),
             sem: con_limit.map(|lim| Arc::new(Semaphore::new(lim))),
-        };
+        }
     }
 
     pub async fn fill(&self) {
@@ -72,15 +72,19 @@ where
                     return Ok(con);
                 }
                 Ok(_) => {
-                    tracing::trace!("connection ping returned wrong value");
+                    tracing::warn!("connection ping returned wrong value");
                 }
                 Err(e) => {
-                    tracing::trace!("bad redis connection: {}", e);
+                    tracing::warn!("bad redis connection: {}", e);
                 }
             }
         }
 
         self.factory.create().await
+    }
+
+    pub fn factory(&self) -> &F {
+        &self.factory
     }
 }
 
@@ -90,11 +94,11 @@ where
     C: redis::aio::ConnectionLike + Send,
 {
     fn clone(&self) -> Self {
-        return RedisPool {
+        RedisPool {
             factory: self.factory.clone(),
             queue: self.queue.clone(),
             sem: self.sem.clone(),
-        };
+        }
     }
 }
 
