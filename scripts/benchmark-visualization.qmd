@@ -4,6 +4,8 @@ format: html
 editor: visual
 ---
 
+# Redis Pool Benchmark Analysis
+
 ## Install Packages
 
 ```{r}
@@ -33,6 +35,11 @@ clean <- data %>%
   select(-val, -itr) %>%
   rename(val = per_val, name = bench)
 
+breaks <- clean %>%
+  distinct(pool_size) %>%
+  pull(pool_size) %>%
+  sort()
+
 # debug info
 # str(clean)
 
@@ -40,15 +47,14 @@ clean <- data %>%
 # write.csv(clean, "clean_benchmark.csv", row.names=FALSE)
 ```
 
+## Throughput Analysis
+
+### Throughput Trends
+
 ```{r, fig.align='center', fig.width=14, fig.height=5}
 plot_data <- clean %>% 
   filter(grepl("^throughput", name)) %>%
   mutate(val = 1/(val/1e9)) # nano to hz
-  
-breaks <- plot_data %>%
-  distinct(pool_size) %>%
-  pull(pool_size) %>%
-  sort()
 
 suppressWarnings(print(
   plot_data %>%
@@ -65,15 +71,44 @@ suppressWarnings(print(
 
 ```
 
+### Throughput Benchmark Distribution, Best Configs
+
+```{r}
+clean2 <- clean %>% mutate(val = 1/(val/1e9)) # nano to hz
+
+avg_throughput <- clean2 %>%
+  filter(grepl("^throughput", name)) %>%
+  group_by(name, pool_size, con_lim) %>%
+  summarise(val = mean(val)) %>%
+  ungroup()
+
+best_config <- avg_throughput %>%
+  group_by(name) %>%
+  slice(which.max(val)) %>%
+  rename(max_pool_size=pool_size, max_con_lim=con_lim, max_val=val)
+
+best_config
+```
+
+```{r}
+dist_data <- clean2 %>%
+  right_join(best_config, by=c('name')) %>%
+  filter(pool_size==max_pool_size) %>%
+  filter(replace_na(con_lim, 0) == replace_na(max_con_lim, 0))
+
+dist_data %>%
+  ggplot(aes(x=val, color=name)) +
+    scale_x_continuous(name="Throughput (Gb/s)") +
+    geom_density() +
+    geom_vline(data=best_config, aes(xintercept=max_val, color=name), linetype="dashed")
+```
+
+## Latency Analysis
+
 ```{r, fig.align='center', fig.width=14, fig.height=5}
 plot_data <- clean %>%
   filter(grepl("^latency", name)) %>%
   mutate(val = val/1e6) # nano to milli
-
-breaks <- plot_data %>% 
-  distinct(pool_size) %>% 
-  pull(pool_size) %>%
-  sort()
 
 plot_data %>%
   ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) +
@@ -85,4 +120,36 @@ plot_data %>%
     scale_y_continuous(name="Latency (ms)") +
     scale_color_discrete(name="Connection Limit") +
     coord_trans(x="log10")
+```
+
+### Latency Benchmark Distribution, Best Configs
+
+```{r}
+clean2 <- clean %>%   mutate(val = val/1e6) # nano to milli
+
+avg_throughput <- clean2 %>%
+  filter(grepl("^latency", name)) %>%
+  group_by(name, pool_size, con_lim) %>%
+  summarise(val = mean(val)) %>%
+  ungroup()
+
+best_config <- avg_throughput %>%
+  group_by(name) %>%
+  slice(which.min(val)) %>%
+  rename(max_pool_size=pool_size, max_con_lim=con_lim, max_val=val)
+
+best_config
+```
+
+```{r}
+dist_data <- clean2 %>%
+  right_join(best_config, by=c('name')) %>%
+  filter(pool_size==max_pool_size) %>%
+  filter(replace_na(con_lim, 0) == replace_na(max_con_lim, 0))
+
+dist_data %>%
+  ggplot(aes(x=val, color=name)) +
+    scale_x_continuous(name="Latency (ms)") +
+    geom_density() +
+    geom_vline(data=best_config, aes(xintercept=max_val, color=name), linetype="dashed")
 ```
