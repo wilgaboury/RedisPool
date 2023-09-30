@@ -40,34 +40,47 @@ clean <- data %>%
 # write.csv(clean, "clean_benchmark.csv", row.names=FALSE)
 ```
 
-```{r}
+```{r, fig.align='center', fig.width=14, fig.height=5}
 plot_data <- clean %>% 
-  filter(name == "parallel_throughput") %>%
+  filter(grepl("^throughput", name)) %>%
   mutate(val = 1/(val/1e9)) # nano to hz
+  
+breaks <- plot_data %>%
+  distinct(pool_size) %>%
+  pull(pool_size) %>%
+  sort()
 
-breaks <- sort((plot_data %>% distinct(pool_size))[['pool_size']])
+suppressWarnings(print(
+  plot_data %>%
+    ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) +
+      facet_grid(~factor(name, levels=c("throughput_single", "throughput_proxy_cluster", "throughput_cluster"), labels=c("Single", "Proxy Cluster", "Cluster"))) +
+      geom_point() +
+      geom_smooth(method = 'loess', aes(group=con_lim)) +
+      stat_summary(geom="point",fun.y = "mean", size=4, shape=1) +
+      scale_x_continuous(name="Pool Size", breaks=breaks) +
+      scale_y_continuous(name="Throughput (Gb/s)") +
+      scale_color_discrete(name="Connection Limit") +
+      coord_trans(x="log10")
+))
 
-plot_data %>%
-  ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) +
-    geom_point() +
-    geom_smooth(method = 'loess', aes(group=con_lim)) +
-    scale_x_continuous(name="Pool Size", breaks=breaks) +
-    scale_y_continuous(name="Throughput (Gb/s)") +
-    scale_color_discrete(name="Connection Limit") +
-    coord_trans(x="log10")
 ```
 
-```{r}
+```{r, fig.align='center', fig.width=14, fig.height=5}
 plot_data <- clean %>%
-  filter(name == "parallel_latency") %>%
+  filter(grepl("^latency", name)) %>%
   mutate(val = val/1e6) # nano to milli
 
-breaks <- sort((plot_data %>% distinct(pool_size))[['pool_size']])
+breaks <- plot_data %>% 
+  distinct(pool_size) %>% 
+  pull(pool_size) %>%
+  sort()
 
 plot_data %>%
   ggplot(aes(x=pool_size, y=val, color=factor(con_lim))) +
+    facet_grid(~factor(name, levels=c("latency_single", "latency_proxy_cluster", "latency_cluster"), labels=c("Single", "Proxy Cluster", "Cluster"))) +
     geom_point() +
     geom_smooth(method = 'lm', aes(group = con_lim)) +
+    stat_summary(geom="point",fun.y = "mean", size=4, shape=1) +
     scale_x_continuous(name="Pool Size", breaks=breaks) +
     scale_y_continuous(name="Latency (ms)") +
     scale_color_discrete(name="Connection Limit") +

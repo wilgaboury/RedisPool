@@ -14,5 +14,5 @@ pub mod cluster;
 #[cfg(feature = "cluster")]
 pub use cluster::ClusterRedisPool;
 
-// #[cfg(feature = "experimental")]
+#[cfg(feature = "experimental")]
 pub mod experimental;

@@ -5,87 +5,104 @@ use criterion::{
     criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup, Criterion,
 };
 use futures::future::join_all;
-use redis_pool::RedisPool;
+use redis_pool::factory::ConnectionFactory;
+use redis_pool::{ClusterRedisPool, RedisPool};
 use testcontainers::clients::Cli;
 use tokio::runtime::Runtime;
-use tokio::select;
-use tokio::sync::oneshot;
-use tokio::time::{self, Duration};
-use utils::{get_set_byte_array, TestRedis};
-
-use crate::utils::bench::KEY_RANGE;
+use utils::bench::{bench_name, bench_pool_sizes_itr, bench_runtime, DATA_1MB, KEYS};
+use utils::{get_set_byte_array, TestClusterRedis, TestRedis};
 
 #[path = "../tests/utils/mod.rs"]
 mod utils;
 
-const DATA_SIZE: usize = 1_048_576;
-const DATA: [u8; DATA_SIZE] = [1; DATA_SIZE];
+const SAMPLES: usize = 25;
+const CONCURRENT_CONS: usize = 500;
 
-const SAMPLES: usize = 100;
-const MIN: usize = 1;
-const MAX: usize = 8;
-
-fn latency(c: &mut Criterion) {
+fn latency_single(c: &mut Criterion) {
     let docker = Cli::docker();
     let redis = TestRedis::new(&docker);
+    let rt = bench_runtime();
 
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-
-    let mut g = c.benchmark_group("latency");
+    let mut g = c.benchmark_group("latency_single");
     g.sample_size(SAMPLES);
 
-    for i in MIN..=MAX {
-        let pool_size = 1 << i;
-        for j in i..=MAX {
-            let con_limit = 1 << j;
-            latency_inner(&mut g, &rt, redis.client(), pool_size, Some(con_limit));
-        }
-        latency_inner(&mut g, &rt, redis.client(), pool_size, None);
+    for (pool_size, con_limit) in bench_pool_sizes_itr() {
+        let name = bench_name(pool_size, con_limit);
+        let pool = RedisPool::new(redis.client(), pool_size, con_limit);
+        rt.block_on(pool.fill());
+
+        latency_inner(&mut g, &rt, name.as_str(), &pool);
     }
 
     g.finish();
 }
 
-fn latency_inner<M: Measurement>(
+fn latency_cluster(c: &mut Criterion) {
+    let docker = Cli::docker();
+    let redis = TestClusterRedis::new(&docker);
+    let rt = bench_runtime();
+
+    let mut g = c.benchmark_group("latency_cluster");
+    g.sample_size(SAMPLES);
+
+    for (pool_size, con_limit) in bench_pool_sizes_itr() {
+        let name = bench_name(pool_size, con_limit);
+        let pool = ClusterRedisPool::new(redis.client(), pool_size, con_limit);
+        rt.block_on(pool.fill());
+
+        latency_inner(&mut g, &rt, name.as_str(), &pool);
+    }
+
+    g.finish();
+}
+
+fn latency_proxy_cluster(c: &mut Criterion) {
+    let docker = Cli::docker();
+    let redis = TestRedis::new(&docker);
+    let rt = bench_runtime();
+
+    let mut g = c.benchmark_group("latency_proxy_cluster");
+    g.sample_size(SAMPLES);
+
+    for (pool_size, con_limit) in bench_pool_sizes_itr() {
+        let name = bench_name(pool_size, con_limit);
+        let pool = RedisPool::new(redis.client(), pool_size, con_limit);
+        rt.block_on(pool.fill());
+
+        latency_inner(&mut g, &rt, name.as_str(), &pool);
+    }
+
+    g.finish();
+}
+
+fn latency_inner<M: Measurement, F, C>(
     g: &mut BenchmarkGroup<'_, M>,
     rt: &Runtime,
-    client: redis::Client,
-    pool_size: usize,
-    con_limit: Option<usize>,
-) {
-    let pool = RedisPool::new(client, pool_size, con_limit);
-    rt.block_on(pool.fill());
-
-    let name = format!(
-        "pool_{:0>4}_limit_{:0>4}",
-        pool_size,
-        con_limit
-            .map(|i| i.to_string())
-            .unwrap_or("none".to_owned())
-    );
-
-    g.bench_function(&name, |b| {
+    name: &str,
+    pool: &RedisPool<F, C>,
+) where
+    F: ConnectionFactory<C> + Send + Sync + Clone + 'static,
+    C: redis::aio::ConnectionLike + Send + 'static,
+{
+    g.bench_function(name, |b| {
         let stop = Arc::new(AtomicBool::new(false));
         let load_pool = pool.clone();
 
         // keep 500 concurrent connections open
-        let joins = (0..500).map(|i| {
+        let joins = (0..CONCURRENT_CONS).map(|i| {
             let load_pool_clone = load_pool.clone();
             let stop = stop.clone();
             rt.spawn(async move {
                 while !stop.load(Ordering::Relaxed) {
                     let mut con = load_pool_clone.aquire().await.unwrap();
-                    let key = (i % KEY_RANGE).to_string();
-                    let _ = get_set_byte_array(key.as_str(), &DATA, &mut con).await;
+                    let key = &KEYS[i % KEYS.len()];
+                    let _ = get_set_byte_array(key, &DATA_1MB, &mut con).await;
                 }
             })
         });
 
         b.to_async(rt).iter(|| async {
-            let mut con = pool.aquire().await.unwrap();
+            let mut con = pool.clone().aquire().await.unwrap();
             let _ = redis::cmd("PING")
                 .arg(0)
                 .query_async::<_, ()>(&mut con)
@@ -103,5 +120,10 @@ fn latency_inner<M: Measurement>(
     })
 }
 
-criterion_group!(benches, latency);
+criterion_group!(
+    benches,
+    latency_single,
+    latency_cluster,
+    latency_proxy_cluster
+);
 criterion_main!(benches);

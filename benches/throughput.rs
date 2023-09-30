@@ -9,7 +9,7 @@ use redis_pool::{factory::ConnectionFactory, ClusterRedisPool, RedisPool};
 use testcontainers::clients::Cli;
 use tokio::runtime::Runtime;
 use utils::{
-    bench::{bench_name, bench_pool_sizes_itr, bench_runtime, DATA_1MB, KEY_RANGE},
+    bench::{bench_name, bench_pool_sizes_itr, bench_runtime, DATA_1MB, KEYS},
     get_set_byte_array, TestClusterRedis, TestRedis,
 };
 
@@ -88,8 +88,8 @@ fn throughput_inner<M: Measurement, F, C>(
                 let pool = pool.clone();
                 tokio::spawn(async move {
                     let mut con = pool.aquire().await.unwrap();
-                    let key = (i % KEY_RANGE).to_string();
-                    get_set_byte_array(key.as_str(), &DATA_1MB, &mut con).await
+                    let key = &KEYS[i % KEYS.len()];
+                    get_set_byte_array(key, &DATA_1MB, &mut con).await
                 })
             }))
         })
